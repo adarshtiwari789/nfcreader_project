@@ -10,7 +10,7 @@ const MOCK_CARDS = [
 ]
 
 export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
-  const { wallet, user, refreshSession } = useAuth()
+  const { wallet, user, setWallet, refreshSession } = useAuth()
   const [scanState, setScanState] = useState('idle')
   const [cardData, setCardData] = useState(null)
   const [error, setError] = useState(null)
@@ -18,6 +18,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   const [pinVerified, setPinVerified] = useState(false)
   const [actionSuccess, setActionSuccess] = useState('')
   const [simUid, setSimUid] = useState('04:A2:3B:6C')
+  const [isAddingFunds, setIsAddingFunds] = useState(false)
 
   const walletBalance = wallet?.balance ?? 1000.0
 
@@ -123,17 +124,20 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   }
 
   const handleQuickAddFunds = async (amount) => {
-    const targetUid = cardData?.uid || wallet?.card?.uid || '04:A2:3B:6C'
+    setError(null)
+    setActionSuccess('')
+    setIsAddingFunds(true)
     try {
-      const res = await api.updateBalance(targetUid, { amount, operation: 'add' })
+      const res = await api.topUpWallet(amount)
       if (res?.data?.wallet) {
-        setActionSuccess(`Added ₹${amount} to wallet balance.`)
-        await refreshSession()
-        setCardData((prev) => prev ? { ...prev, balance: res.data.wallet.balance } : null)
+        if (setWallet) setWallet(res.data.wallet)
+        setCardData((prev) => (prev ? { ...prev, balance: res.data.wallet.balance } : null))
+        setActionSuccess(`Successfully credited ₹${amount.toLocaleString('en-IN')} to your digital wallet!`)
       }
-    } catch {
-      setActionSuccess(`Added ₹${amount} to wallet balance.`)
-      await refreshSession()
+    } catch (err) {
+      setError(err?.message || 'Could not add funds to wallet. Please try again.')
+    } finally {
+      setIsAddingFunds(false)
     }
   }
 
@@ -272,10 +276,11 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               {[100, 500, 1000].map((amt) => (
                 <button
                   key={amt}
+                  disabled={isAddingFunds}
                   onClick={() => handleQuickAddFunds(amt)}
-                  className="py-3 px-3 text-sm font-semibold bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl transition-all cursor-pointer text-slate-700 min-h-[44px]"
+                  className="py-3 px-3 text-sm font-semibold bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl transition-all cursor-pointer text-slate-700 min-h-[44px] disabled:opacity-50"
                 >
-                  +₹{amt}
+                  {isAddingFunds ? 'Adding…' : `+₹${amt}`}
                 </button>
               ))}
             </div>

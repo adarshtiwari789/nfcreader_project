@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { api } from '../api'
+import { api, setAuthToken } from '../api'
 
 const AuthContext = createContext(null)
 
@@ -16,9 +16,13 @@ export function AuthProvider({ children }) {
         setWallet(res.data.wallet)
       }
       return res?.data
-    } catch {
-      setUser(null)
-      setWallet(null)
+    } catch (err) {
+      // ONLY clear session if server explicitly returns 401 Unauthorized
+      if (err?.status === 401) {
+        setUser(null)
+        setWallet(null)
+        setAuthToken(null)
+      }
       return null
     }
   }
@@ -32,6 +36,9 @@ export function AuthProvider({ children }) {
   const login = async (credentials) => {
     const res = await api.login(credentials)
     if (res?.data) {
+      if (res.data.token) {
+        setAuthToken(res.data.token)
+      }
       setUser(res.data.user)
       setWallet(res.data.wallet)
     }
@@ -41,6 +48,9 @@ export function AuthProvider({ children }) {
   const register = async (userData) => {
     const res = await api.register(userData)
     if (res?.data) {
+      if (res.data.token) {
+        setAuthToken(res.data.token)
+      }
       setUser(res.data.user)
       setWallet(res.data.wallet)
     }
@@ -51,6 +61,7 @@ export function AuthProvider({ children }) {
     try {
       await api.logout()
     } finally {
+      setAuthToken(null)
       setUser(null)
       setWallet(null)
     }

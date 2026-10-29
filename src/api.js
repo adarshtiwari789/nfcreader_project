@@ -4,14 +4,23 @@ const BASE_URL = import.meta.env.VITE_API_URL || (
     : 'https://nfc-backend-bswp.onrender.com/api'
 );
 
+let inMemoryToken = null;
+
+export const setAuthToken = (token) => {
+  inMemoryToken = token || null;
+};
+
+export const getAuthToken = () => inMemoryToken;
+
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
+    ...(inMemoryToken ? { Authorization: `Bearer ${inMemoryToken}` } : {}),
     ...(options.headers || {}),
   };
 
   const res = await fetch(`${BASE_URL}${path}`, {
-    credentials: 'include', // Send HTTP-only auth cookies on every request
+    credentials: 'include', // Primary: send HTTP-only auth cookies on every request
     headers,
     ...options,
   });
@@ -35,6 +44,9 @@ export const api = {
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: () => request('/auth/me'),
+
+  // Wallet & Top-up
+  topUpWallet: (amount) => request('/cards/topup', { method: 'POST', body: JSON.stringify({ amount }) }),
 
   // Cards & Enrollment
   getEnrollmentToken: () => request('/cards/enrollment-token'),
