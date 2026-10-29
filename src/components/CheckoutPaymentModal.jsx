@@ -10,7 +10,8 @@ export default function CheckoutPaymentModal({
   onPaymentSuccess,
 }) {
   const [stage, setStage] = useState('scan') // 'scan' | 'pin' | 'processing' | 'success' | 'failed'
-  const [detectedToken, setDetectedToken] = useState(null)
+  const [detectedIdentifier, setDetectedIdentifier] = useState(null)
+  const [detectedCardType, setDetectedCardType] = useState('MIFARE Classic / NFC Tag')
   const [detectedCardMask, setDetectedCardMask] = useState('NFC-****')
   const [pin, setPin] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -31,11 +32,10 @@ export default function CheckoutPaymentModal({
   const walletBalance = wallet?.balance ?? 0
   const isBalanceSufficient = walletBalance >= grandTotalInr
 
-  // Reset or initialize on modal open
   useEffect(() => {
     if (isOpen) {
       setStage('scan')
-      setDetectedToken(null)
+      setDetectedIdentifier(null)
       setPin('')
       setErrorMsg('')
       setReceipt(null)
@@ -49,7 +49,6 @@ export default function CheckoutPaymentModal({
     }
   }, [isOpen])
 
-  // Focus PIN input when moving to PIN stage
   useEffect(() => {
     if (stage === 'pin') {
       setTimeout(() => {
@@ -69,7 +68,9 @@ export default function CheckoutPaymentModal({
       await ndef.scan({ signal: controller.signal })
 
       ndef.onreading = (event) => {
+        const hwUid = event.serialNumber || ''
         let readToken = null
+
         if (event.message?.records) {
           for (const record of event.message.records) {
             if (record.recordType === 'text') {
@@ -80,13 +81,17 @@ export default function CheckoutPaymentModal({
           }
         }
 
-        if (readToken) {
-          handleCardDetected(readToken)
+        // MIFARE Classic 1K tags provide event.serialNumber (UID)
+        const identifier = readToken || hwUid
+        const type = hwUid.length <= 14 ? 'MIFARE Classic 1K' : 'NFC Forum Type 2'
+
+        if (identifier) {
+          handleCardDetected(identifier, type)
         }
       }
 
       ndef.onreadingerror = () => {
-        setErrorMsg('Error reading NFC tag. Please position card flat against the NFC antenna.')
+        setErrorMsg('Error reading card. Position your MIFARE Classic or NFC card steady on the sensor.')
       }
     } catch {
       setIsScanningHardware(false)
@@ -101,32 +106,35 @@ export default function CheckoutPaymentModal({
     setIsScanningHardware(false)
   }
 
-  const handleCardDetected = (token) => {
+  const handleCardDetected = (idValue, cardType = 'MIFARE Classic / NFC') => {
     stopNfcListening()
-    setDetectedToken(token)
-    const clean = token.replace(/[^A-Za-z0-9]/g, '')
-    const masked = clean.length > 8 ? `NFC-${clean.slice(0, 4)}...${clean.slice(-4)}` : 'NFC-TAG'
+    setDetectedIdentifier(idValue)
+    setDetectedCardType(cardType)
+
+    const clean = idValue.replace(/[^A-Za-z0-9]/g, '')
+    const masked =
+      clean.length > 8
+        ? `NFC-${clean.slice(0, 4)}...${clean.slice(-4)}`
+        : `MC1K-${clean}`
+
     setDetectedCardMask(masked)
     setErrorMsg('')
     setStage('pin')
   }
 
-  // Simulation fallback for desktop or development
+  // Simulation for desktop / testing
   const handleSimulateCardTap = async () => {
     setErrorMsg('')
     try {
-      // Fetch user's registered card token or generate mock verified token
       const res = await api.getMyCard()
       if (res?.data?.hasCard && res.data.card) {
-        // Use user's enrolled card UID or tag token
-        const token = res.data.card.token || res.data.card.uid || 'NFC-SIMULATED-TAG-TOKEN'
-        handleCardDetected(token)
+        const card = res.data.card
+        handleCardDetected(card.uid, card.cardType || 'MIFARE Classic 1K')
       } else {
-        // User has not enrolled card yet
-        handleCardDetected('NFC-MOCK-CARD-TOKEN-04A23B6C')
+        handleCardDetected('04:A2:3B:6C', 'MIFARE Classic 1K')
       }
     } catch {
-      handleCardDetected('NFC-MOCK-CARD-TOKEN-04A23B6C')
+      handleCardDetected('04:A2:3B:6C', 'MIFARE Classic 1K')
     }
   }
 
@@ -148,7 +156,8 @@ export default function CheckoutPaymentModal({
       }))
 
       const payload = {
-        token: detectedToken,
+        token: detectedIdentifier,
+        hardwareUid: detectedIdentifier,
         pin,
         items: orderItems,
         idempotencyKey,
@@ -191,7 +200,7 @@ export default function CheckoutPaymentModal({
               <h3 className="text-base font-bold text-slate-900 leading-snug">
                 Apex Contactless Checkout
               </h3>
-              <p className="text-xs text-slate-500">Secure Direct Wallet Debit</p>
+              <p className="text-xs text-slate-500">MIFARE Classic 1K &amp; NFC Compatible</p>
             </div>
           </div>
 
@@ -226,7 +235,7 @@ export default function CheckoutPaymentModal({
           </div>
         </div>
 
-        {/* Modal Body: State Machine */}
+        {/* Modal Body */}
         <div className="p-6">
 
           {/* ── STAGE 1: SCAN NFC CARD ── */}
@@ -239,21 +248,18 @@ export default function CheckoutPaymentModal({
                     <p className="font-semibold">Insufficient Wallet Balance</p>
                     <p className="mt-0.5">
                       Required: ₹{grandTotalInr.toFixed(2)}, Available: ₹{walletBalance.toFixed(2)}.
-                      Please top up your wallet in the NFC Cards & Wallet section.
+                      Please top up your wallet in the NFC Cards &amp; Wallet section.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Realistic Pulsing Contactless Reader Graphic */}
+              {/* Pulsing Contactless Reader Graphic */}
               <div className="py-6 flex flex-col items-center justify-center">
                 <div className="relative flex items-center justify-center">
-                  {/* Radar Wave 1 */}
                   <div className="absolute w-36 h-36 rounded-full bg-emerald-100/60 animate-ping pointer-events-none" style={{ animationDuration: '2.5s' }} />
-                  {/* Radar Wave 2 */}
                   <div className="absolute w-28 h-28 rounded-full bg-emerald-200/50 animate-pulse pointer-events-none" />
                   
-                  {/* Reader Icon Disc */}
                   <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-tr from-slate-900 via-slate-800 to-emerald-950 text-emerald-400 flex items-center justify-center shadow-lg border border-slate-700">
                     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M6 8.32a7.43 7.43 0 010 7.36" />
@@ -266,10 +272,10 @@ export default function CheckoutPaymentModal({
 
                 <div className="mt-5 space-y-1">
                   <h4 className="text-base font-bold text-slate-900">
-                    {isScanningHardware ? 'Listening for NFC Card…' : 'Ready to Tap'}
+                    {isScanningHardware ? 'Listening for Card Tap…' : 'Ready for Contactless Tap'}
                   </h4>
                   <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                    Hold your enrolled physical NFC card flat against your device&apos;s contactless antenna.
+                    Hold your <strong>MIFARE Classic 1K</strong> or NFC tag flat against the contactless reader.
                   </p>
                 </div>
               </div>
@@ -286,10 +292,10 @@ export default function CheckoutPaymentModal({
                     <rect x="2" y="5" width="20" height="14" rx="2" />
                     <line x1="2" y1="10" x2="22" y2="10" />
                   </svg>
-                  Simulate Card Tap (Demo Mode)
+                  Simulate MIFARE Classic 1K Tap
                 </button>
                 <p className="text-[11px] text-slate-400">
-                  On desktop without NFC antenna, click above to simulate contactless detection.
+                  On desktop or non-NFC hardware, click above to simulate contactless detection.
                 </p>
               </div>
             </div>
@@ -307,7 +313,9 @@ export default function CheckoutPaymentModal({
                     </svg>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-emerald-950">Card Detected &amp; Verified</p>
+                    <p className="text-xs font-semibold text-emerald-950">
+                      {detectedCardType} Detected
+                    </p>
                     <p className="text-[11px] font-mono text-emerald-800">{detectedCardMask}</p>
                   </div>
                 </div>
@@ -383,7 +391,7 @@ export default function CheckoutPaymentModal({
               <div>
                 <h4 className="text-base font-bold text-slate-900">Authorizing Payment…</h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
-                  Verifying cryptographic card ownership, checking PIN, and executing atomic ledger debit.
+                  Verifying {detectedCardType} card ownership, checking PIN, and executing atomic ledger debit.
                 </p>
               </div>
             </div>
@@ -399,7 +407,9 @@ export default function CheckoutPaymentModal({
                   </svg>
                 </div>
                 <h4 className="text-lg font-bold text-slate-900">Payment Approved!</h4>
-                <p className="text-xs text-slate-500">Contactless transaction completed successfully.</p>
+                <p className="text-xs text-slate-500">
+                  {receipt.card?.cardType || 'MIFARE Classic 1K'} transaction completed successfully.
+                </p>
               </div>
 
               {/* Digital Banking Receipt Card */}
@@ -423,6 +433,12 @@ export default function CheckoutPaymentModal({
                   <span className="text-slate-500">Remaining Wallet Balance</span>
                   <span className="font-mono font-semibold text-slate-900">
                     ₹{Number(receipt.remainingBalance).toFixed(2)} INR
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Card Standard</span>
+                  <span className="font-mono text-slate-700">
+                    {receipt.card?.cardType || detectedCardType}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -498,4 +514,3 @@ export default function CheckoutPaymentModal({
     </div>
   )
 }
-

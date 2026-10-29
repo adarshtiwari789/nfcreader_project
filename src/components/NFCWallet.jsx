@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext'
 
 /* ── Fallback cards for testing & simulation ── */
 const MOCK_CARDS = [
-  { uid: '04:A2:3B:6C:D1:00:80', holderName: 'Adarsh Tiwari', status: 'Active', pin: '1234' },
-  { uid: '04:B1:4C:7D:E2:00:81', holderName: 'Alex Morgan', status: 'Active', pin: '1234' },
-  { uid: '04:C0:5D:8E:F3:00:82', holderName: 'Jordan Lee', status: 'Suspended', pin: '1234' },
+  { uid: '04:A2:3B:6C', holderName: 'Adarsh Tiwari', status: 'Active', pin: '1234', cardType: 'MIFARE Classic 1K' },
+  { uid: '04:B1:4C:7D', holderName: 'Alex Morgan', status: 'Active', pin: '1234', cardType: 'MIFARE Classic 1K' },
+  { uid: '04:C0:5D:8E:F3:00:82', holderName: 'Jordan Lee', status: 'Suspended', pin: '1234', cardType: 'NFC Forum Type 2' },
 ]
 
 export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
@@ -17,7 +17,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   const [pinInput, setPinInput] = useState('')
   const [pinVerified, setPinVerified] = useState(false)
   const [actionSuccess, setActionSuccess] = useState('')
-  const [simUid, setSimUid] = useState('04:A2:3B:6C:D1:00:80')
+  const [simUid, setSimUid] = useState('04:A2:3B:6C')
 
   const walletBalance = wallet?.balance ?? 1000.0
 
@@ -60,7 +60,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
       const ndef = new NDEFReader()
       await ndef.scan()
       ndef.onreading = async (event) => {
-        const uid = event.serialNumber || '04:A2:3B:6C:D1:00:80'
+        const uid = event.serialNumber || '04:A2:3B:6C'
         await resolveCardWithBackend(uid)
       }
       ndef.onreadingerror = () => {
@@ -86,13 +86,14 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         })
         setScanState('success')
-        setActionSuccess('Card detected and verified successfully.')
+        setActionSuccess(`Card detected (${res.data.card.cardType || 'MIFARE Classic 1K'}) and verified!`)
         if (onCardUpdated) onCardUpdated(res.data.card)
         return
       }
     } catch {
       const mock = MOCK_CARDS.find((c) => c.uid === uidToScan) || {
         uid: uidToScan,
+        cardType: uidToScan.length <= 14 ? 'MIFARE Classic 1K' : 'NFC Forum Type 2',
         holderName: user?.name || 'Registered User',
         status: 'Active',
         pin: '1234',
@@ -100,7 +101,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
       setCardData({
         ...mock,
         balance: walletBalance,
-        maskedToken: `NFC-${uidToScan.slice(0, 4)}...${uidToScan.slice(-4)}`,
+        maskedToken: `NFC-${uidToScan.replace(/[^A-Za-z0-9]/g, '').slice(0, 4)}...${uidToScan.replace(/[^A-Za-z0-9]/g, '').slice(-4)}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       })
       setScanState('success')
@@ -122,7 +123,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   }
 
   const handleQuickAddFunds = async (amount) => {
-    const targetUid = cardData?.uid || wallet?.card?.uid || '04:A2:3B:6C:D1:00:80'
+    const targetUid = cardData?.uid || wallet?.card?.uid || '04:A2:3B:6C'
     try {
       const res = await api.updateBalance(targetUid, { amount, operation: 'add' })
       if (res?.data?.wallet) {
@@ -145,7 +146,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
             NFC Cards &amp; Wallet
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage your physical NFC payment cards, check balances, and configure security PINs.
+            Manage your physical MIFARE Classic 1K or NFC payment cards, check balances, and configure security PINs.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -157,7 +158,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14" />
               </svg>
-              Enroll New NFC Card
+              Enroll MIFARE / NFC Card
             </button>
           )}
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-xs whitespace-nowrap">
@@ -165,7 +166,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               scanState === 'scanning' ? 'bg-amber-500 animate-ping' :
               scanState === 'success' || cardData ? 'bg-emerald-500' : 'bg-slate-300'
             }`} />
-            {scanState === 'scanning' ? 'Scanning for Card…' : cardData ? 'Card Enrolled & Linked' : 'Reader Ready'}
+            {scanState === 'scanning' ? 'Scanning for Card…' : cardData ? `${cardData.cardType || 'MIFARE Classic'} Linked` : 'Reader Ready'}
           </span>
         </div>
       </div>
@@ -191,15 +192,20 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6 space-y-6">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Card Preview</h2>
-            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
-              cardData?.status === 'Active'
-                ? 'bg-emerald-100 text-emerald-800'
-                : cardData?.status === 'Suspended'
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-slate-100 text-slate-600'
-            }`}>
-              {cardData ? cardData.status : 'No Card Active'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                {cardData?.cardType || 'MIFARE Classic 1K'}
+              </span>
+              <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+                cardData?.status === 'Active'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : cardData?.status === 'Suspended'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {cardData ? cardData.status : 'No Card Active'}
+              </span>
+            </div>
           </div>
 
           {/* Physical Card Representation */}
@@ -213,10 +219,10 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
                 </svg>
                 <span className="text-xs font-bold tracking-wider uppercase">Contactless Pay</span>
               </div>
-              <span className="text-xs font-semibold text-slate-400">Apex Debit</span>
+              <span className="text-xs font-semibold text-slate-400">Apex Debit • {cardData?.cardType || 'MIFARE Classic'}</span>
             </div>
 
-            {/* Chip */}
+            {/* Chip Graphic */}
             <div className="my-3 w-11 h-8 rounded-md bg-gradient-to-tr from-amber-200 to-amber-400 border border-amber-500 flex items-center justify-center p-1 shadow-xs">
               <div className="w-full h-full border border-amber-600/40 rounded-sm flex items-center justify-center">
                 <div className="w-4 h-3 border-r border-l border-amber-700/40" />
@@ -227,15 +233,15 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
             <div className="space-y-3">
               <div className="flex flex-wrap justify-between items-baseline gap-2">
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-400 font-medium">Card Reference</p>
+                  <p className="text-xs text-slate-400 font-medium">Hardware Card Identifier (UID)</p>
                   <p className="text-sm font-mono font-bold tracking-widest text-slate-100 break-all">
-                    {cardData ? (cardData.maskedToken || cardData.uid) : '•••• •••• •••• ••••'}
+                    {cardData ? cardData.uid : '•••• •••• •••• ••••'}
                   </p>
                 </div>
-                {cardData?.uid && (
+                {cardData?.maskedToken && (
                   <div className="text-right shrink-0">
-                    <p className="text-[10px] text-slate-400 font-medium">Identifier</p>
-                    <p className="text-xs font-mono text-emerald-400 font-semibold">{cardData.uid}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Reference</p>
+                    <p className="text-xs font-mono text-emerald-400 font-semibold">{cardData.maskedToken}</p>
                   </div>
                 )}
               </div>
@@ -296,7 +302,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
                 <path d="M9.46 6.21a11.76 11.76 0 010 11.58" />
                 <path d="M12.91 4.1a16.07 16.07 0 010 15.8" />
               </svg>
-              {scanState === 'scanning' ? 'Scanning for Tag…' : 'Scan NFC Card'}
+              {scanState === 'scanning' ? 'Scanning for Card…' : 'Scan MIFARE / NFC Card'}
             </button>
 
             <button
@@ -318,7 +324,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               >
                 {MOCK_CARDS.map((c) => (
                   <option key={c.uid} value={c.uid}>
-                    {c.holderName} — {c.uid}
+                    {c.holderName} — {c.uid} ({c.cardType})
                   </option>
                 ))}
               </select>
@@ -367,8 +373,8 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
                 <span className="font-medium text-slate-800">ISO/IEC 14443 Type A</span>
               </div>
               <div className="space-y-0.5">
-                <span className="text-slate-400 block">Record Type</span>
-                <span className="font-medium text-slate-800">NDEF Text Record</span>
+                <span className="text-slate-400 block">Transponder Standard</span>
+                <span className="font-medium text-slate-800">{cardData?.cardType || 'MIFARE Classic 1K'}</span>
               </div>
               <div className="space-y-0.5">
                 <span className="text-slate-400 block">Last Scanned</span>
