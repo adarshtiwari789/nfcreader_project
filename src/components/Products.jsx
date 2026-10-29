@@ -2,59 +2,77 @@ import { products } from '../data'
 
 export default function Products({ onAddToCart }) {
   return (
-    <section id="products-section" className="animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-text)]">
-          Products
-        </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Curated essentials, designed to last.
-        </p>
+    <div id="products-section" className="animate-fade-in space-y-6">
+      {/* ── Page Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Product Store
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Official hardware and accessories compatible with Apex Bank NFC contactless payments.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          NFC Checkout Ready
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger">
+      {/* ── Product Grid (3 Columns) ── */}
+      <div className="grid grid-cols-3 gap-6">
         {products.map((p) => (
-          <article
+          <div
             key={p.id}
             id={`product-${p.id}`}
-            className="group relative flex flex-col bg-[var(--color-surface)] rounded-[var(--radius)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] hover:border-[var(--color-border-hover)] transition-all duration-300 animate-fade-in-up overflow-hidden"
+            className="group flex flex-col bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200 overflow-hidden"
           >
-            {/* Image */}
-            <div className="relative aspect-square bg-[#f5f5f5] overflow-hidden">
+            {/* Image Preview */}
+            <div className="relative aspect-[4/3] bg-slate-50 border-b border-slate-100 overflow-hidden flex items-center justify-center p-5">
               <img
                 src={p.image}
                 alt={p.name}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
               />
               {p.tag && (
-                <span className="absolute top-3 left-3 px-2.5 py-0.5 text-[11px] font-medium tracking-wide uppercase bg-[var(--color-text)] text-white rounded-full">
+                <span className="absolute top-3 left-3 px-2.5 py-0.5 text-xs font-semibold bg-slate-900 text-white rounded-md shadow-xs">
                   {p.tag}
                 </span>
               )}
             </div>
 
-            {/* Info */}
-            <div className="flex flex-col gap-3 p-4">
+            {/* Info & Purchase Action */}
+            <div className="flex flex-col flex-1 p-5 justify-between gap-4">
               <div>
-                <h2 className="text-sm font-medium text-[var(--color-text)] leading-snug">
+                <h3 className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
                   {p.name}
-                </h2>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--color-text)]">
-                  ${p.price.toFixed(2)}
-                </p>
+                </h3>
+                <div className="mt-1.5 flex items-baseline gap-2">
+                  <span className="text-base font-bold text-slate-900 tabular-nums">
+                    ${p.price.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    ≈ ₹{(p.price * 83).toFixed(0)} INR
+                  </span>
+                </div>
               </div>
 
               <button
                 id={`add-to-cart-${p.id}`}
                 onClick={() => onAddToCart(p)}
-                className="w-full py-2.5 text-xs font-medium tracking-wide uppercase rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                className="w-full py-2.5 px-4 text-xs font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <path d="M16 10a4 4 0 01-8 0" />
+                </svg>
                 Add to Cart
               </button>
             </div>
-          </article>
+          </div>
         ))}
       </div>
-    </section>
+    </div>
   )
 }

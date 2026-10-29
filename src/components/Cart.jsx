@@ -1,122 +1,177 @@
+import { useState } from 'react'
+
 const MinusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
 )
 const PlusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
 )
 const TrashIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-)
-const BagIcon = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-text-tertiary)]"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
 )
 
-export default function Cart({ items, onUpdateQty, onRemove }) {
+export default function Cart({ items, onUpdateQty, onRemove, onTriggerCheckout }) {
+  const [isCheckingOut, setIsCheckingOut] = useState(false)
   const total = items.reduce((s, i) => s + i.price * i.qty, 0)
+  const estimatedTax = total * 0.08
+  const grandTotal = total + (total > 0 ? estimatedTax : 0)
 
   if (items.length === 0) {
     return (
-      <section id="cart-section" className="animate-fade-in">
-        <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-text)] mb-8">
-          Cart
-        </h1>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <BagIcon />
-          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-            Your cart is empty
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
-            Add products to get started.
-          </p>
+      <div id="cart-section" className="animate-fade-in bg-white rounded-2xl border border-slate-200 shadow-xs p-12 text-center max-w-lg mx-auto my-12">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400 mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <path d="M16 10a4 4 0 01-8 0" />
+          </svg>
         </div>
-      </section>
+        <h2 className="text-lg font-bold text-slate-900">Your Cart is Empty</h2>
+        <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+          Add hardware products to your cart and pay seamlessly with your NFC card.
+        </p>
+      </div>
     )
   }
 
   return (
-    <section id="cart-section" className="animate-fade-in">
-      <div className="mb-8 flex items-baseline justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-text)]">
-          Cart
-        </h1>
-        <span className="text-xs text-[var(--color-text-tertiary)]">
-          {items.length} item{items.length !== 1 && 's'}
+    <div id="cart-section" className="animate-fade-in space-y-6">
+      {/* ── Page Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Shopping Cart
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Review your order before checking out with contactless payment.
+          </p>
+        </div>
+        <span className="text-xs font-semibold px-3 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200">
+          {items.length} Product{items.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div className="flex flex-col gap-3 stagger">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            id={`cart-item-${item.id}`}
-            className="flex items-center gap-4 p-4 bg-[var(--color-surface)] rounded-[var(--radius)] border border-[var(--color-border)] shadow-[var(--shadow-sm)] animate-fade-in-up transition-all duration-200"
-          >
-            {/* Thumbnail */}
-            <div className="w-16 h-16 shrink-0 rounded-[var(--radius-sm)] bg-[#f5f5f5] overflow-hidden">
-              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-            </div>
+      <div className="grid grid-cols-3 gap-6 items-start">
+        {/* Cart items list (2 columns) */}
+        <div className="col-span-2 space-y-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              id={`cart-item-${item.id}`}
+              className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:border-slate-300 transition-colors"
+            >
+              <div className="w-16 h-16 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center p-2">
+                <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+              </div>
 
-            {/* Details */}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[var(--color-text)] truncate">{item.name}</p>
-              <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                ${item.price.toFixed(2)} each
-              </p>
-            </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-semibold text-slate-900 truncate">{item.name}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ${item.price.toFixed(2)} each
+                </p>
+              </div>
 
-            {/* Qty controls */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                id={`qty-minus-${item.id}`}
-                onClick={() => onUpdateQty(item.id, -1)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:bg-[#f5f5f5] active:scale-95 transition-all cursor-pointer"
-              >
-                <MinusIcon />
-              </button>
-              <span className="w-8 text-center text-sm font-medium tabular-nums">
-                {item.qty}
-              </span>
-              <button
-                id={`qty-plus-${item.id}`}
-                onClick={() => onUpdateQty(item.id, 1)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:bg-[#f5f5f5] active:scale-95 transition-all cursor-pointer"
-              >
-                <PlusIcon />
-              </button>
-            </div>
+              {/* Quantity */}
+              <div className="flex items-center gap-2 border border-slate-200 rounded-xl p-1 bg-slate-50">
+                <button
+                  id={`qty-minus-${item.id}`}
+                  onClick={() => onUpdateQty(item.id, -1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-xs"
+                >
+                  <MinusIcon />
+                </button>
+                <span className="w-6 text-center text-sm font-semibold tabular-nums">
+                  {item.qty}
+                </span>
+                <button
+                  id={`qty-plus-${item.id}`}
+                  onClick={() => onUpdateQty(item.id, 1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-slate-900 border border-slate-200 transition-all cursor-pointer shadow-xs"
+                >
+                  <PlusIcon />
+                </button>
+              </div>
 
-            {/* Line total + remove */}
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-sm font-semibold tabular-nums w-20 text-right">
-                ${(item.price * item.qty).toFixed(2)}
-              </span>
+              {/* Total + Remove */}
+              <div className="text-right pl-3">
+                <p className="text-sm font-bold text-slate-900 tabular-nums">
+                  ${(item.price * item.qty).toFixed(2)}
+                </p>
+              </div>
+
               <button
                 id={`remove-${item.id}`}
                 onClick={() => onRemove(item.id)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-text-tertiary)] hover:text-red-500 hover:bg-red-50 active:scale-95 transition-all cursor-pointer"
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                title="Remove item"
               >
                 <TrashIcon />
               </button>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Summary */}
-      <div className="mt-6 p-5 bg-[var(--color-surface)] rounded-[var(--radius)] border border-[var(--color-border)] shadow-[var(--shadow-sm)]">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-[var(--color-text-secondary)]">Total</span>
-          <span className="text-xl font-semibold tracking-tight tabular-nums">
-            ${total.toFixed(2)}
-          </span>
+          ))}
         </div>
-        <button
-          id="checkout-btn"
-          className="mt-4 w-full py-3 text-sm font-medium rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer"
-        >
-          Checkout
-        </button>
+
+        {/* Order Summary (1 column) */}
+        <div className="col-span-1 bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+          <h3 className="text-base font-bold text-slate-900">
+            Order Summary
+          </h3>
+
+          <div className="space-y-3 text-sm text-slate-600">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span className="font-semibold text-slate-900 tabular-nums">${total.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Estimated Tax (8%)</span>
+              <span className="font-semibold text-slate-900 tabular-nums">${estimatedTax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>NFC Payment Fee</span>
+              <span className="font-semibold text-emerald-600">Free</span>
+            </div>
+            <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
+              <span className="font-bold text-slate-900">Total</span>
+              <div className="text-right">
+                <span className="text-xl font-bold text-slate-900 tabular-nums">
+                  ${grandTotal.toFixed(2)}
+                </span>
+                <p className="text-xs text-slate-400">≈ ₹{(grandTotal * 83).toFixed(2)} INR</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3">
+            <button
+              id="checkout-btn"
+              onClick={() => {
+                if (onTriggerCheckout) {
+                  onTriggerCheckout(grandTotal)
+                } else {
+                  setIsCheckingOut(true)
+                }
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8.32a7.43 7.43 0 010 7.36" />
+                <path d="M9.46 6.21a11.76 11.76 0 010 11.58" />
+                <path d="M12.91 4.1a16.07 16.07 0 010 15.8" />
+              </svg>
+              Pay with NFC Card
+            </button>
+            <p className="text-xs text-center text-slate-400 mt-2.5">
+              Contactless debit directly from your NFC card
+            </p>
+          </div>
+
+          {isCheckingOut && !onTriggerCheckout && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 animate-fade-in">
+              Please go to the <strong>NFC Cards & Wallet</strong> tab to tap your card.
+            </div>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   )
 }
