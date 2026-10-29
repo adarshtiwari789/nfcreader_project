@@ -78,6 +78,15 @@ body {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* ── Custom Scrollbar for Desktop/Laptop ── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -92,4 +101,26 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+/* ── Mobile: hide scrollbar but allow scroll ── */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* ── Sidebar overlay backdrop ── */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 19, 43, 0.55);
+  z-index: 30;
+  backdrop-filter: blur(2px);
+}
+
+/* ── Mobile bottom nav safe area ── */
+.mobile-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

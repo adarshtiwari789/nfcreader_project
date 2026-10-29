@@ -11,7 +11,7 @@ const MOCK_CARDS = [
 
 export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   const { wallet, user, refreshSession } = useAuth()
-  const [scanState, setScanState] = useState('idle') // idle | scanning | success
+  const [scanState, setScanState] = useState('idle')
   const [cardData, setCardData] = useState(null)
   const [error, setError] = useState(null)
   const [pinInput, setPinInput] = useState('')
@@ -19,10 +19,8 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   const [actionSuccess, setActionSuccess] = useState('')
   const [simUid, setSimUid] = useState('04:A2:3B:6C:D1:00:80')
 
-  // Wallet balance is single source of truth
   const walletBalance = wallet?.balance ?? 1000.0
 
-  // Automatically load enrolled card for this user on mount
   useEffect(() => {
     api.getMyCard()
       .then((res) => {
@@ -30,28 +28,21 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
           setCardData({
             ...res.data.card,
             balance: walletBalance,
-            timestamp: res.data.card.lastScannedAt ? new Date(res.data.card.lastScannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Enrolled',
+            timestamp: res.data.card.lastScannedAt
+              ? new Date(res.data.card.lastScannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Enrolled',
           })
         } else if (wallet?.card) {
-          setCardData({
-            ...wallet.card,
-            balance: walletBalance,
-            timestamp: 'Enrolled',
-          })
+          setCardData({ ...wallet.card, balance: walletBalance, timestamp: 'Enrolled' })
         }
       })
       .catch(() => {
         if (wallet?.card) {
-          setCardData({
-            ...wallet.card,
-            balance: walletBalance,
-            timestamp: 'Enrolled',
-          })
+          setCardData({ ...wallet.card, balance: walletBalance, timestamp: 'Enrolled' })
         }
       })
   }, [wallet, walletBalance])
 
-  // Real Web NFC Scan: reads NDEF record token or hardware UID
   async function handleHardwareScan() {
     setError(null)
     setActionSuccess('')
@@ -68,12 +59,10 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
     try {
       const ndef = new NDEFReader()
       await ndef.scan()
-
       ndef.onreading = async (event) => {
         const uid = event.serialNumber || '04:A2:3B:6C:D1:00:80'
         await resolveCardWithBackend(uid)
       }
-
       ndef.onreadingerror = () => {
         setError('Could not read NFC card. Please hold the card steady and try again.')
         setScanState('idle')
@@ -84,7 +73,6 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
     }
   }
 
-  // Simulate or Call Backend
   async function resolveCardWithBackend(uidToScan) {
     setScanState('scanning')
     setError(null)
@@ -94,7 +82,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
       if (res?.data?.card) {
         setCardData({
           ...res.data.card,
-          balance: walletBalance, // Wallet is single source of truth
+          balance: walletBalance,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         })
         setScanState('success')
@@ -129,12 +117,12 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
       setActionSuccess('PIN confirmed! Card unlocked for payments.')
       setError(null)
     } else {
-      setError('Incorrect PIN. The default demonstration PIN is 1234.')
+      setError('Incorrect PIN. The demonstration PIN is 1234.')
     }
   }
 
   const handleQuickAddFunds = async (amount) => {
-    const targetUid = cardData?.uid || (wallet?.card?.uid) || '04:A2:3B:6C:D1:00:80'
+    const targetUid = cardData?.uid || wallet?.card?.uid || '04:A2:3B:6C:D1:00:80'
     try {
       const res = await api.updateBalance(targetUid, { amount, operation: 'add' })
       if (res?.data?.wallet) {
@@ -143,7 +131,6 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
         setCardData((prev) => prev ? { ...prev, balance: res.data.wallet.balance } : null)
       }
     } catch {
-      // Fallback update
       setActionSuccess(`Added ₹${amount} to wallet balance.`)
       await refreshSession()
     }
@@ -152,20 +139,20 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
   return (
     <div id="nfc-section" className="animate-fade-in space-y-6">
       {/* ── Page Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            NFC Cards & Wallet
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
+            NFC Cards &amp; Wallet
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Manage your physical NFC payment cards, check balances, and configure security PINs.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {onOpenEnrollment && (
             <button
               onClick={onOpenEnrollment}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer min-h-[42px] whitespace-nowrap"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14" />
@@ -173,8 +160,11 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               Enroll New NFC Card
             </button>
           )}
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-xs">
-            <span className={`w-2 h-2 rounded-full ${scanState === 'scanning' ? 'bg-amber-500 animate-ping' : scanState === 'success' || cardData ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-xs whitespace-nowrap">
+            <span className={`w-2 h-2 rounded-full ${
+              scanState === 'scanning' ? 'bg-amber-500 animate-ping' :
+              scanState === 'success' || cardData ? 'bg-emerald-500' : 'bg-slate-300'
+            }`} />
             {scanState === 'scanning' ? 'Scanning for Card…' : cardData ? 'Card Enrolled & Linked' : 'Reader Ready'}
           </span>
         </div>
@@ -182,39 +172,38 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
 
       {/* Feedback Messages */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-800 text-sm font-bold">✕</button>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between gap-3">
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-800 font-bold shrink-0">✕</button>
         </div>
       )}
       {actionSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 flex items-center justify-between">
-          <span>{actionSuccess}</span>
-          <button onClick={() => setActionSuccess('')} className="text-emerald-600 hover:text-emerald-900 text-sm font-bold">✕</button>
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 flex items-center justify-between gap-3">
+          <span className="flex-1">{actionSuccess}</span>
+          <button onClick={() => setActionSuccess('')} className="text-emerald-600 hover:text-emerald-900 font-bold shrink-0">✕</button>
         </div>
       )}
 
-      {/* ── Balanced Two-Column Layout (Cards A & B) ── */}
-      <div className="grid grid-cols-2 gap-6 items-start">
-        {/* Column A: NFC Card Preview & Physical Card Display */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+      {/* ── Two-Column Layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6 items-start">
+
+        {/* ── Column A: Card Preview ── */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6 space-y-6">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Card Preview</h2>
-            <div className="flex items-center gap-2">
-              <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
-                cardData?.status === 'Active'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : cardData?.status === 'Suspended'
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-slate-100 text-slate-600'
-              }`}>
-                {cardData ? cardData.status : 'No Card Active'}
-              </span>
-            </div>
+            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+              cardData?.status === 'Active'
+                ? 'bg-emerald-100 text-emerald-800'
+                : cardData?.status === 'Suspended'
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {cardData ? cardData.status : 'No Card Active'}
+            </span>
           </div>
 
           {/* Physical Card Representation */}
-          <div className="relative rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-6 text-white shadow-md border border-slate-700 min-h-[220px] flex flex-col justify-between overflow-hidden">
+          <div className="relative rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-5 md:p-6 text-white shadow-md border border-slate-700 min-h-[210px] flex flex-col justify-between overflow-hidden">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-emerald-400">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -227,41 +216,39 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
               <span className="text-xs font-semibold text-slate-400">Apex Debit</span>
             </div>
 
-            {/* Chip Graphic */}
-            <div className="my-4 w-11 h-8 rounded-md bg-gradient-to-tr from-amber-200 to-amber-400 border border-amber-500 flex items-center justify-center p-1 shadow-xs">
-              <div className="w-full h-full border border-amber-600/40 rounded-xs flex items-center justify-center">
+            {/* Chip */}
+            <div className="my-3 w-11 h-8 rounded-md bg-gradient-to-tr from-amber-200 to-amber-400 border border-amber-500 flex items-center justify-center p-1 shadow-xs">
+              <div className="w-full h-full border border-amber-600/40 rounded-sm flex items-center justify-center">
                 <div className="w-4 h-3 border-r border-l border-amber-700/40" />
               </div>
             </div>
 
-            {/* Card UID and Cardholder */}
+            {/* UID & Cardholder */}
             <div className="space-y-3">
-              <div className="flex justify-between items-baseline">
-                <div>
-                  <p className="text-xs text-slate-400 font-medium">Card Identifier (UID)</p>
-                  <p className="text-base font-mono font-bold tracking-widest text-slate-100">
-                    {cardData ? cardData.uid : '•••• •••• •••• ••••'}
+              <div className="flex flex-wrap justify-between items-baseline gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-400 font-medium">Card Reference</p>
+                  <p className="text-sm font-mono font-bold tracking-widest text-slate-100 break-all">
+                    {cardData ? (cardData.maskedToken || cardData.uid) : '•••• •••• •••• ••••'}
                   </p>
                 </div>
-                {cardData?.maskedToken && (
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-medium">Enrolled Token</p>
-                    <p className="text-xs font-mono text-emerald-400 font-semibold">
-                      {cardData.maskedToken}
-                    </p>
+                {cardData?.uid && (
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-slate-400 font-medium">Identifier</p>
+                    <p className="text-xs font-mono text-emerald-400 font-semibold">{cardData.uid}</p>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-end justify-between pt-1">
+              <div className="flex flex-wrap items-end justify-between gap-2 pt-1">
                 <div>
-                  <p className="text-xs text-slate-400 font-medium">Cardholder Name</p>
+                  <p className="text-xs text-slate-400 font-medium">Cardholder</p>
                   <p className="text-sm font-semibold text-white">
                     {cardData ? cardData.holderName : (user?.name || 'Hold card near device')}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-400 font-medium">Wallet Balance (Source of Truth)</p>
+                  <p className="text-xs text-slate-400 font-medium">Wallet Balance</p>
                   <p className="text-xl font-bold font-mono text-emerald-400 tabular-nums">
                     ₹{walletBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </p>
@@ -270,9 +257,9 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
             </div>
           </div>
 
-          {/* Quick Balance Top-up */}
-          <div className="pt-2">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2.5">
+          {/* Quick Top-up */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
               Quick Add Wallet Balance
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -280,7 +267,7 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
                 <button
                   key={amt}
                   onClick={() => handleQuickAddFunds(amt)}
-                  className="py-2.5 px-3 text-sm font-semibold bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl transition-all cursor-pointer text-slate-700"
+                  className="py-3 px-3 text-sm font-semibold bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl transition-all cursor-pointer text-slate-700 min-h-[44px]"
                 >
                   +₹{amt}
                 </button>
@@ -289,41 +276,38 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
           </div>
         </div>
 
-        {/* Column B: Card Management, Scanning & Security PIN */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+        {/* ── Column B: Card Management ── */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6 space-y-6">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Card Management</h2>
-            <span className="text-xs text-slate-500">Security & Tap Controls</span>
+            <span className="text-xs text-slate-500">Security &amp; Tap Controls</span>
           </div>
 
-          {/* Scanning Action Group */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                id="scan-nfc-btn"
-                onClick={handleHardwareScan}
-                disabled={scanState === 'scanning'}
-                className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 shadow-xs"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 8.32a7.43 7.43 0 010 7.36" />
-                  <path d="M9.46 6.21a11.76 11.76 0 010 11.58" />
-                  <path d="M12.91 4.1a16.07 16.07 0 010 15.8" />
-                </svg>
-                {scanState === 'scanning' ? 'Scanning…' : 'Scan NFC Card'}
-              </button>
+          {/* Scan Actions */}
+          <div className="space-y-4">
+            <button
+              id="scan-nfc-btn"
+              onClick={handleHardwareScan}
+              disabled={scanState === 'scanning'}
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 shadow-xs min-h-[48px]"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8.32a7.43 7.43 0 010 7.36" />
+                <path d="M9.46 6.21a11.76 11.76 0 010 11.58" />
+                <path d="M12.91 4.1a16.07 16.07 0 010 15.8" />
+              </svg>
+              {scanState === 'scanning' ? 'Scanning for Tag…' : 'Scan NFC Card'}
+            </button>
 
-              <button
-                type="button"
-                onClick={() => resolveCardWithBackend(simUid)}
-                className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200"
-              >
-                Simulate Card Tap
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => resolveCardWithBackend(simUid)}
+              className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200 min-h-[44px]"
+            >
+              Simulate Card Tap
+            </button>
 
-            {/* Mock-card selector below scan action */}
-            <div className="pt-1">
+            <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">
                 Select Card for Tap Simulation:
               </label>
@@ -341,60 +325,56 @@ export default function NFCWallet({ onCardUpdated, onOpenEnrollment }) {
             </div>
           </div>
 
-          {/* Security PIN Controls */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+          {/* Security PIN */}
+          <div className="p-4 md:p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Security PIN</h3>
-                <p className="text-xs text-slate-500">Required before authorizing payments</p>
+                <p className="text-xs text-slate-500 mt-0.5">Required before authorizing payments</p>
               </div>
               <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
-                pinVerified
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-slate-200 text-slate-700'
+                pinVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
               }`}>
                 {pinVerified ? 'Authorized' : 'Not Verified'}
               </span>
             </div>
 
-            <form onSubmit={handleVerifyPin} className="flex gap-3">
+            <form onSubmit={handleVerifyPin} className="flex flex-col sm:flex-row gap-3">
               <input
                 type="password"
                 maxLength={4}
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="4-digit PIN (1234)"
-                className="flex-1 px-3 py-2 text-sm text-center font-mono tracking-widest bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600"
+                className="flex-1 px-3 py-2.5 text-sm text-center font-mono tracking-widest bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 min-h-[44px]"
               />
               <button
                 type="submit"
                 disabled={!cardData}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer min-h-[44px] whitespace-nowrap"
               >
                 Verify PIN
               </button>
             </form>
           </div>
 
-          {/* Compact Technical Card Details */}
-          <div className="space-y-2 pt-2 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Card Details
-            </p>
-            <div className="grid grid-cols-2 gap-3 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <div>
+          {/* Technical Card Details */}
+          <div className="space-y-3 pt-1 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Card Details</p>
+            <div className="grid grid-cols-2 gap-3 text-xs text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="space-y-0.5">
                 <span className="text-slate-400 block">Protocol</span>
                 <span className="font-medium text-slate-800">ISO/IEC 14443 Type A</span>
               </div>
-              <div>
+              <div className="space-y-0.5">
                 <span className="text-slate-400 block">Record Type</span>
                 <span className="font-medium text-slate-800">NDEF Text Record</span>
               </div>
-              <div>
+              <div className="space-y-0.5">
                 <span className="text-slate-400 block">Last Scanned</span>
                 <span className="font-medium text-slate-800">{cardData?.timestamp || 'Never'}</span>
               </div>
-              <div>
+              <div className="space-y-0.5">
                 <span className="text-slate-400 block">Card Status</span>
                 <span className="font-medium text-emerald-700">{cardData?.status || 'Ready'}</span>
               </div>

@@ -1,22 +1,32 @@
-const BASE_URL = 'https://nfc-backend-bswp.onrender.com/api'
+const BASE_URL = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000/api'
+    : 'https://nfc-backend-bswp.onrender.com/api'
+);
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    credentials: 'include', // Send HTTP-only cookies automatically
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  })
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
 
-  const data = await res.json().catch(() => ({}))
+  const res = await fetch(`${BASE_URL}${path}`, {
+    credentials: 'include', // Send HTTP-only auth cookies on every request
+    headers,
+    ...options,
+  });
+
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const error = new Error(data.message || 'Request failed')
-    error.status = res.status
-    error.errors = data.errors || []
-    throw error
+    const error = new Error(data.message || 'Request failed');
+    error.status = res.status;
+    error.errors = data.errors || [];
+    error.data = data;
+    throw error;
   }
 
-  return data
+  return data;
 }
 
 export const api = {
@@ -34,4 +44,13 @@ export const api = {
   getCards: () => request('/cards'),
   getCardByUid: (uid) => request(`/cards/${uid}`),
   updateBalance: (uid, body) => request(`/cards/${uid}/balance`, { method: 'PATCH', body: JSON.stringify(body) }),
-}
+
+  // Payments & Transactions
+  payWithCard: (payload) =>
+    request('/cards/pay', {
+      method: 'POST',
+      headers: payload.idempotencyKey ? { 'Idempotency-Key': payload.idempotencyKey } : {},
+      body: JSON.stringify(payload),
+    }),
+  getMyTransactions: () => request('/cards/transactions'),
+};
