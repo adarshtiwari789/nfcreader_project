@@ -130,8 +130,21 @@ export default function CheckoutPaymentModal({
       if (res?.data?.hasCard && res.data.card) {
         const card = res.data.card
         handleCardDetected(card.uid, card.cardType || 'MIFARE Classic 1K')
+        return
+      }
+
+      // If user hasn't enrolled a card yet, provision a demo MIFARE Classic 1K card
+      const demoHex = Math.random().toString(16).substring(2, 10).toUpperCase()
+      const enrollRes = await api.enrollCard({
+        hardwareUid: demoHex,
+        cardType: 'MIFARE Classic 1K',
+        pin: '1234',
+        holderName: user?.name || 'Authorized Member',
+      })
+      if (enrollRes?.data?.card) {
+        handleCardDetected(enrollRes.data.card.uid, 'MIFARE Classic 1K')
       } else {
-        handleCardDetected('04:A2:3B:6C', 'MIFARE Classic 1K')
+        handleCardDetected(demoHex, 'MIFARE Classic 1K')
       }
     } catch {
       handleCardDetected('04:A2:3B:6C', 'MIFARE Classic 1K')
@@ -259,7 +272,7 @@ export default function CheckoutPaymentModal({
                 <div className="relative flex items-center justify-center">
                   <div className="absolute w-36 h-36 rounded-full bg-emerald-100/60 animate-ping pointer-events-none" style={{ animationDuration: '2.5s' }} />
                   <div className="absolute w-28 h-28 rounded-full bg-emerald-200/50 animate-pulse pointer-events-none" />
-                  
+
                   <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-tr from-slate-900 via-slate-800 to-emerald-950 text-emerald-400 flex items-center justify-center shadow-lg border border-slate-700">
                     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M6 8.32a7.43 7.43 0 010 7.36" />

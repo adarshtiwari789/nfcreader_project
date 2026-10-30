@@ -118,7 +118,7 @@ export default function DashboardOverview({ user, wallet, onNavigate }) {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums leading-none">
-                ₹10,000
+                ₹50,000
               </span>
               <p className="text-xs text-emerald-600 font-medium mt-1.5">
                 Velocity limit active
