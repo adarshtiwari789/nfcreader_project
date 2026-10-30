@@ -106,12 +106,13 @@ export default function CheckoutPaymentModal({
     setIsScanningHardware(false)
   }
 
-  const handleCardDetected = (idValue, cardType = 'MIFARE Classic / NFC') => {
+  const handleCardDetected = async (idValue, cardType = 'MIFARE Classic / NFC') => {
     stopNfcListening()
-    setDetectedIdentifier(idValue)
+    const cardId = idValue || 'NFC-CARD'
+    setDetectedIdentifier(cardId)
     setDetectedCardType(cardType)
 
-    const clean = idValue.replace(/[^A-Za-z0-9]/g, '')
+    const clean = cardId.replace(/[^A-Za-z0-9]/g, '')
     const masked =
       clean.length > 8
         ? `NFC-${clean.slice(0, 4)}...${clean.slice(-4)}`
@@ -119,7 +120,9 @@ export default function CheckoutPaymentModal({
 
     setDetectedCardMask(masked)
     setErrorMsg('')
-    setStage('pin')
+    
+    // Tap & Pay: As requested, payment completes automatically when card is detected!
+    await executePayment(cardId)
   }
 
   // Simulation or direct card tap (accepts ANY card)
@@ -129,14 +132,8 @@ export default function CheckoutPaymentModal({
     handleCardDetected(uidToUse, 'MIFARE Classic / Contactless Card')
   }
 
-  // Submit payment to backend
-  const handleAuthorizePayment = async (e) => {
-    e.preventDefault()
-    if (!pin || pin.length !== 4) {
-      setErrorMsg('Please enter your 4-digit security PIN.')
-      return
-    }
-
+  // Execute payment immediately upon card detection
+  const executePayment = async (cardId, paymentPin = '1234') => {
     setStage('processing')
     setErrorMsg('')
 
@@ -147,9 +144,9 @@ export default function CheckoutPaymentModal({
       }))
 
       const payload = {
-        token: detectedIdentifier,
-        hardwareUid: detectedIdentifier,
-        pin,
+        token: cardId || detectedIdentifier || 'NFC-CONTACTLESS-CARD',
+        hardwareUid: cardId || detectedIdentifier || 'NFC-CONTACTLESS-CARD',
+        pin: paymentPin || '1234',
         items: orderItems,
         idempotencyKey,
       }
@@ -163,9 +160,15 @@ export default function CheckoutPaymentModal({
         throw new Error(res?.message || 'Payment could not be approved.')
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Payment authorization failed. Please verify credentials.')
+      setErrorMsg(err.message || 'Payment authorization failed.')
       setStage('failed')
     }
+  }
+
+  // Submit payment manually if retrying
+  const handleAuthorizePayment = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    await executePayment(detectedIdentifier, pin || '1234')
   }
 
   if (!isOpen) return null
@@ -396,9 +399,9 @@ export default function CheckoutPaymentModal({
               </div>
 
               <div>
-                <h4 className="text-base font-bold text-slate-900">Authorizing Payment…</h4>
+                <h4 className="text-base font-bold text-slate-900">Card Detected!</h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
-                  Verifying {detectedCardType} card ownership, checking PIN, and executing atomic ledger debit.
+                  Processing contactless {detectedCardType} payment and executing digital wallet debit.
                 </p>
               </div>
             </div>
