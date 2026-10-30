@@ -122,33 +122,11 @@ export default function CheckoutPaymentModal({
     setStage('pin')
   }
 
-  // Simulation for desktop / testing
-  const handleSimulateCardTap = async () => {
+  // Simulation or direct card tap (accepts ANY card)
+  const handleSimulateCardTap = (customUid) => {
     setErrorMsg('')
-    try {
-      const res = await api.getMyCard()
-      if (res?.data?.hasCard && res.data.card) {
-        const card = res.data.card
-        handleCardDetected(card.uid, card.cardType || 'MIFARE Classic 1K')
-        return
-      }
-
-      // If user hasn't enrolled a card yet, provision a demo MIFARE Classic 1K card
-      const demoHex = Math.random().toString(16).substring(2, 10).toUpperCase()
-      const enrollRes = await api.enrollCard({
-        hardwareUid: demoHex,
-        cardType: 'MIFARE Classic 1K',
-        pin: '1234',
-        holderName: user?.name || 'Authorized Member',
-      })
-      if (enrollRes?.data?.card) {
-        handleCardDetected(enrollRes.data.card.uid, 'MIFARE Classic 1K')
-      } else {
-        handleCardDetected(demoHex, 'MIFARE Classic 1K')
-      }
-    } catch {
-      handleCardDetected('04:A2:3B:6C', 'MIFARE Classic 1K')
-    }
+    const uidToUse = customUid || wallet?.card?.uid || '04:A2:3B:6C'
+    handleCardDetected(uidToUse, 'MIFARE Classic / Contactless Card')
   }
 
   // Submit payment to backend
@@ -295,9 +273,25 @@ export default function CheckoutPaymentModal({
 
               {/* Action Buttons */}
               <div className="space-y-2.5 pt-2">
+                {hasWebNFC && !isScanningHardware && (
+                  <button
+                    type="button"
+                    onClick={startNfcListening}
+                    disabled={!isBalanceSufficient}
+                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs min-h-[46px]"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 8.32a7.43 7.43 0 010 7.36" />
+                      <path d="M9.46 6.21a11.76 11.76 0 010 11.58" />
+                      <path d="M12.91 4.1a16.07 16.07 0 010 15.8" />
+                    </svg>
+                    Activate Phone NFC Reader
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={handleSimulateCardTap}
+                  onClick={() => handleSimulateCardTap()}
                   disabled={!isBalanceSufficient}
                   className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs min-h-[46px]"
                 >
@@ -305,10 +299,10 @@ export default function CheckoutPaymentModal({
                     <rect x="2" y="5" width="20" height="14" rx="2" />
                     <line x1="2" y1="10" x2="22" y2="10" />
                   </svg>
-                  Simulate MIFARE Classic 1K Tap
+                  Tap Card / Quick Checkout
                 </button>
                 <p className="text-[11px] text-slate-400">
-                  On desktop or non-NFC hardware, click above to simulate contactless detection.
+                  Any physical card tap or one-click tap accepted. Authorized via your 4-digit PIN (default: <strong>1234</strong>).
                 </p>
               </div>
             </div>
