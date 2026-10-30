@@ -9,22 +9,20 @@ export default function CheckoutPaymentModal({
   user,
   onPaymentSuccess,
 }) {
-  const [stage, setStage] = useState('scan') // 'scan' | 'pin' | 'processing' | 'success' | 'failed'
-  const [detectedIdentifier, setDetectedIdentifier] = useState(null)
-  const [detectedCardType, setDetectedCardType] = useState('MIFARE Classic / NFC Tag')
-  const [detectedCardMask, setDetectedCardMask] = useState('NFC-****')
-  const [pin, setPin] = useState('')
+  const [stage, setStage] = useState('scan') // 'scan' | 'processing' | 'success' | 'failed'
   const [errorMsg, setErrorMsg] = useState('')
   const [receipt, setReceipt] = useState(null)
   const [isScanningHardware, setIsScanningHardware] = useState(false)
-  const [idempotencyKey] = useState(() => `IDEMP-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`)
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    `IDEMP-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+  )
 
-  const pinInputRef = useRef(null)
   const ndefAbortControllerRef = useRef(null)
+  const paymentInFlightRef = useRef(false)
 
   const hasWebNFC = typeof window !== 'undefined' && 'NDEFReader' in window
 
-  // Calculate order pricing
+  // Calculate order pricing (server recalculates — this is display only)
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
   const tax = Number((subtotal * 0.08).toFixed(2))
   const grandTotalUsd = Number((subtotal + (subtotal > 0 ? tax : 0)).toFixed(2))
@@ -32,13 +30,14 @@ export default function CheckoutPaymentModal({
   const walletBalance = wallet?.balance ?? 0
   const isBalanceSufficient = walletBalance >= grandTotalInr
 
+  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setStage('scan')
-      setDetectedIdentifier(null)
-      setPin('')
       setErrorMsg('')
       setReceipt(null)
+      paymentInFlightRef.current = false
+      setIdempotencyKey(`IDEMP-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`)
 
       if (hasWebNFC && isBalanceSufficient) {
         startNfcListening()
@@ -49,14 +48,7 @@ export default function CheckoutPaymentModal({
     }
   }, [isOpen])
 
-  useEffect(() => {
-    if (stage === 'pin') {
-      setTimeout(() => {
-        pinInputRef.current?.focus()
-      }, 100)
-    }
-  }, [stage])
-
+  // ── NFC Listening: detect ANY tag, don't read data ──
   const startNfcListening = async () => {
     if (!hasWebNFC) return
     try {
@@ -67,31 +59,14 @@ export default function CheckoutPaymentModal({
 
       await ndef.scan({ signal: controller.signal })
 
-      ndef.onreading = (event) => {
-        const hwUid = event.serialNumber || ''
-        let readToken = null
-
-        if (event.message?.records) {
-          for (const record of event.message.records) {
-            if (record.recordType === 'text') {
-              const decoder = new TextDecoder(record.encoding || 'utf-8')
-              readToken = decoder.decode(record.data)
-              break
-            }
-          }
-        }
-
-        // MIFARE Classic 1K tags provide event.serialNumber (UID)
-        const identifier = readToken || hwUid
-        const type = hwUid.length <= 14 ? 'MIFARE Classic 1K' : 'NFC Forum Type 2'
-
-        if (identifier) {
-          handleCardDetected(identifier, type)
-        }
+      ndef.onreading = () => {
+        // Tag detected — trigger payment immediately, don't read any data
+        handleCardDetected()
       }
 
       ndef.onreadingerror = () => {
-        setErrorMsg('Error reading card. Position your MIFARE Classic or NFC card steady on the sensor.')
+        // Even on read error, the tag WAS detected — still trigger payment
+        handleCardDetected()
       }
     } catch {
       setIsScanningHardware(false)
@@ -106,34 +81,24 @@ export default function CheckoutPaymentModal({
     setIsScanningHardware(false)
   }
 
-  const handleCardDetected = async (idValue, cardType = 'MIFARE Classic / NFC') => {
+  // ── Card detected: immediately execute payment ──
+  const handleCardDetected = () => {
     stopNfcListening()
-    const cardId = idValue || 'NFC-CARD'
-    setDetectedIdentifier(cardId)
-    setDetectedCardType(cardType)
-
-    const clean = cardId.replace(/[^A-Za-z0-9]/g, '')
-    const masked =
-      clean.length > 8
-        ? `NFC-${clean.slice(0, 4)}...${clean.slice(-4)}`
-        : `MC1K-${clean}`
-
-    setDetectedCardMask(masked)
-    setErrorMsg('')
-    
-    // Tap & Pay: As requested, payment completes automatically when card is detected!
-    await executePayment(cardId)
+    executePayment()
   }
 
-  // Simulation or direct card tap (accepts ANY card)
-  const handleSimulateCardTap = (customUid) => {
+  // Simulation button (for devices without NFC)
+  const handleSimulateCardTap = () => {
     setErrorMsg('')
-    const uidToUse = customUid || wallet?.card?.uid || '04:A2:3B:6C'
-    handleCardDetected(uidToUse, 'MIFARE Classic / Contactless Card')
+    handleCardDetected()
   }
 
-  // Execute payment immediately upon card detection
-  const executePayment = async (cardId, paymentPin = '1234') => {
+  // ── Execute payment: items + idempotencyKey only ──
+  const executePayment = async () => {
+    // Prevent duplicate submissions
+    if (paymentInFlightRef.current) return
+    paymentInFlightRef.current = true
+
     setStage('processing')
     setErrorMsg('')
 
@@ -143,15 +108,10 @@ export default function CheckoutPaymentModal({
         qty: item.qty,
       }))
 
-      const payload = {
-        token: cardId || detectedIdentifier || 'NFC-CONTACTLESS-CARD',
-        hardwareUid: cardId || detectedIdentifier || 'NFC-CONTACTLESS-CARD',
-        pin: paymentPin || '1234',
+      const res = await api.payWithCard({
         items: orderItems,
         idempotencyKey,
-      }
-
-      const res = await api.payWithCard(payload)
+      })
 
       if (res?.data && (res.status === 'success' || res.data.status === 'completed')) {
         setReceipt(res.data)
@@ -162,13 +122,8 @@ export default function CheckoutPaymentModal({
     } catch (err) {
       setErrorMsg(err.message || 'Payment authorization failed.')
       setStage('failed')
+      paymentInFlightRef.current = false
     }
-  }
-
-  // Submit payment manually if retrying
-  const handleAuthorizePayment = async (e) => {
-    if (e && e.preventDefault) e.preventDefault()
-    await executePayment(detectedIdentifier, pin || '1234')
   }
 
   if (!isOpen) return null
@@ -194,7 +149,7 @@ export default function CheckoutPaymentModal({
               <h3 className="text-base font-bold text-slate-900 leading-snug">
                 Apex Contactless Checkout
               </h3>
-              <p className="text-xs text-slate-500">MIFARE Classic 1K &amp; NFC Compatible</p>
+              <p className="text-xs text-slate-500">Tap any NFC card to pay</p>
             </div>
           </div>
 
@@ -269,7 +224,7 @@ export default function CheckoutPaymentModal({
                     {isScanningHardware ? 'Listening for Card Tap…' : 'Ready for Contactless Tap'}
                   </h4>
                   <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                    Hold your <strong>MIFARE Classic 1K</strong> or NFC tag flat against the contactless reader.
+                    Hold any <strong>NFC card</strong> flat against the contactless reader to pay instantly.
                   </p>
                 </div>
               </div>
@@ -294,7 +249,7 @@ export default function CheckoutPaymentModal({
 
                 <button
                   type="button"
-                  onClick={() => handleSimulateCardTap()}
+                  onClick={handleSimulateCardTap}
                   disabled={!isBalanceSufficient}
                   className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs min-h-[46px]"
                 >
@@ -305,87 +260,13 @@ export default function CheckoutPaymentModal({
                   Tap Card / Quick Checkout
                 </button>
                 <p className="text-[11px] text-slate-400">
-                  Any physical card tap or one-click tap accepted. Authorized via your 4-digit PIN (default: <strong>1234</strong>).
+                  Any NFC card tap triggers instant payment from your wallet. No PIN required.
                 </p>
               </div>
             </div>
           )}
 
-          {/* ── STAGE 2: ENTER PAYMENT PIN ── */}
-          {stage === 'pin' && (
-            <div className="space-y-6">
-              {/* Card Detected Badge */}
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-emerald-950">
-                      {detectedCardType} Detected
-                    </p>
-                    <p className="text-[11px] font-mono text-emerald-800">{detectedCardMask}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setStage('scan'); setPin(''); }}
-                  className="text-xs text-slate-500 hover:text-slate-800 font-medium underline cursor-pointer"
-                >
-                  Change
-                </button>
-              </div>
-
-              {/* PIN Form */}
-              <form onSubmit={handleAuthorizePayment} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-900 mb-1">
-                    Enter 4-Digit Payment PIN
-                  </label>
-                  <p className="text-xs text-slate-500 mb-3">
-                    Authorization key configured during card enrollment (demo default: <strong>1234</strong>).
-                  </p>
-                  <input
-                    ref={pinInputRef}
-                    type="password"
-                    maxLength={4}
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="••••"
-                    className="w-full py-3.5 px-4 text-center text-2xl font-mono font-bold tracking-[0.5em] bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors"
-                  />
-                </div>
-
-                {errorMsg && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
-                    <span className="shrink-0">⚠️</span>
-                    <span>{errorMsg}</span>
-                  </div>
-                )}
-
-                <div className="pt-2 space-y-2">
-                  <button
-                    type="submit"
-                    disabled={pin.length !== 4}
-                    className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer min-h-[46px]"
-                  >
-                    Confirm &amp; Debit ₹{grandTotalInr.toFixed(2)}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setStage('scan'); setPin(''); }}
-                    className="w-full py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 rounded-xl transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* ── STAGE 3: PROCESSING WITH APEX CORE ── */}
+          {/* ── STAGE 2: PROCESSING ── */}
           {stage === 'processing' && (
             <div className="py-10 text-center space-y-4">
               <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
@@ -401,13 +282,13 @@ export default function CheckoutPaymentModal({
               <div>
                 <h4 className="text-base font-bold text-slate-900">Card Detected!</h4>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
-                  Processing contactless {detectedCardType} payment and executing digital wallet debit.
+                  Processing contactless payment and executing digital wallet debit.
                 </p>
               </div>
             </div>
           )}
 
-          {/* ── STAGE 4A: SUCCESSFUL RECEIPT ── */}
+          {/* ── STAGE 3A: SUCCESSFUL RECEIPT ── */}
           {stage === 'success' && receipt && (
             <div className="space-y-5 animate-fade-in">
               <div className="text-center space-y-1 pb-1">
@@ -418,7 +299,7 @@ export default function CheckoutPaymentModal({
                 </div>
                 <h4 className="text-lg font-bold text-slate-900">Payment Approved!</h4>
                 <p className="text-xs text-slate-500">
-                  {receipt.card?.cardType || 'MIFARE Classic 1K'} transaction completed successfully.
+                  Contactless transaction completed successfully.
                 </p>
               </div>
 
@@ -446,16 +327,8 @@ export default function CheckoutPaymentModal({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Card Standard</span>
-                  <span className="font-mono text-slate-700">
-                    {receipt.card?.cardType || detectedCardType}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Card Reference</span>
-                  <span className="font-mono text-slate-700">
-                    {receipt.card?.maskedToken || detectedCardMask}
-                  </span>
+                  <span className="text-slate-500">Payment Method</span>
+                  <span className="font-mono text-slate-700">NFC Contactless Tap</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Timestamp</span>
@@ -479,7 +352,7 @@ export default function CheckoutPaymentModal({
             </div>
           )}
 
-          {/* ── STAGE 4B: PAYMENT FAILED ── */}
+          {/* ── STAGE 3B: PAYMENT FAILED ── */}
           {stage === 'failed' && (
             <div className="space-y-5 text-center">
               <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-xs">
@@ -502,17 +375,25 @@ export default function CheckoutPaymentModal({
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setStage('pin'); setErrorMsg(''); }}
+                  onClick={() => {
+                    setErrorMsg('')
+                    paymentInFlightRef.current = false
+                    setIdempotencyKey(`IDEMP-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`)
+                    setStage('scan')
+                    if (hasWebNFC && isBalanceSufficient) {
+                      startNfcListening()
+                    }
+                  }}
                   className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
-                  Try PIN Again
+                  Tap Again
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setStage('scan'); setPin(''); setErrorMsg(''); }}
+                  onClick={onClose}
                   className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition-all cursor-pointer min-h-[44px]"
                 >
-                  Scan Again
+                  Cancel
                 </button>
               </div>
             </div>

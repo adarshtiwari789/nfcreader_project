@@ -57,12 +57,12 @@ export const api = {
   getCardByUid: (uid) => request(`/cards/${uid}`),
   updateBalance: (uid, body) => request(`/cards/${uid}/balance`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  // Payments & Transactions
-  payWithCard: (payload) =>
+  // Payments & Transactions — NFC is trigger only, sends items + idempotencyKey
+  payWithCard: ({ items, idempotencyKey }) =>
     request('/cards/pay', {
       method: 'POST',
-      headers: payload.idempotencyKey ? { 'Idempotency-Key': payload.idempotencyKey } : {},
-      body: JSON.stringify(payload),
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+      body: JSON.stringify({ items, idempotencyKey }),
     }),
   getMyTransactions: () => request('/cards/transactions'),
 };
